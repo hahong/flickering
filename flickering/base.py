@@ -198,7 +198,7 @@ def cv(frames):
     return s / m
 
 
-def sampen(y, M, r):
+def sampen_full(y, M, r):
     """Compute SampEn.
 
 Input
@@ -288,14 +288,21 @@ Wu et al., Entropy 2013, 15, 1069-1084
 
 try:
     # try to import fast C version
-    from . import ffast as ff
-    sampen_scale2 = ff.sampen_scale2_f64f64
+    from . import ffast as __ff    # flake8: noqa
+
+    def sampen_scale2_ffast(y, r):
+        # this additional import mechanism is needed for joblib
+        from . import ffast as ff_
+        return ff_.sampen_scale2_f64f64(y, r)
+    sampen_scale2 = sampen_scale2_ffast
+
 except:
     sampen_scale2 = sampen_scale2_py
 
 
-def mse(signal, r=0.15, scales=None, scale_num=6, scale_min=1):
-    """Perform DFA analysis.
+def mse(signal, r=0.15, scales=None, scale_num=6, scale_min=1,
+        sampen_func=sampen_scale2, output='sum', normalize=True):
+    """Perform MSE analysis.
 
 Input
 -----
@@ -310,11 +317,28 @@ http://www.physionet.org/physiotools/mse/tutorial/tutorial.pdf
     if len(signal.shape) != 1:
         raise ValueError('"signal" must be 1D.')
 
-    if scales in None:
+    if normalize:
+        m = np.mean(signal)
+        s = np.std(signal, ddof=1)
+        signal = (signal - m) / s
+
+    if scales is None:
         scales = range(scale_min, scale_min + scale_num)
 
-    # XXX: NOT IMPEMENTED
-    raise NotImplementedError('Not implemented yet.')
+    es = []
+    for scale in scales:
+        if scale == 1:
+            y = signal
+        else:
+            y = [e for e in grouper(signal, scale)]
+            y = np.mean(y, axis=1)
+        e = sampen_func(y, r)
+        es.append(e)
+
+    if output == 'sum':
+        return np.sum(es)
+
+    return es
 
 
 # -- Analysis driver functions
