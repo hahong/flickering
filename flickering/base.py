@@ -2,9 +2,10 @@
 import numpy as np
 import os
 import glob
+from joblib import Parallel, delayed
 
 
-# -- some helper functions
+# -- Some helper functions
 def grouper(iterable, n, offset=0):
     """Create chunks of size n."""
     l = len(iterable)
@@ -16,7 +17,7 @@ def grouper(iterable, n, offset=0):
         yield iterable[ib: ie]
 
 
-# -- data IO functions
+# -- Data IO functions
 def load_once_csv(f, sep=','):
     """Load a single frame in a csv file."""
     lines = [e.strip().split(sep) for e in open(f).readlines()]
@@ -46,8 +47,9 @@ def load_data(path, dattype='csvdir', patt=None, kw_loader={}, flist=None):
     # get file lists and data
     if flist is None:
         flist = sorted(glob.glob(path + os.path.sep + patt))
+
     if len(flist) == 0:
-        return   # nothing to read
+        raise ValueError('No files to read')
 
     frames = []
     for f in flist:
@@ -63,6 +65,7 @@ def load_data(path, dattype='csvdir', patt=None, kw_loader={}, flist=None):
     return frames
 
 
+# -- Main analysis functions
 def hurst(signal, ns=None, full=False, n_begin=10, n_num=128):
     """Compute Hurst exponent.
 
@@ -119,8 +122,7 @@ def get_detrended_var(y_chunk, deg=1):
 
 
 def dfa(signal, scales=None, deg=1, full=False,
-    do_twoway=True,
-    scale_num=32, scale_begin_fac=4):
+    do_twoway=True, scale_num=32, scale_begin_fac=4):
     """Perform DFA analysis.
 
 Input
@@ -129,6 +131,7 @@ signal: signal
 scales: a vector of scales
 deg: detrend polynomial order
 full: if True, some diagnostic variables will be returned as well.
+do_twoway: if True (default), 2nd calculation will be done in backward.
 
 Reference
 ---------
@@ -185,3 +188,48 @@ def cv(frames):
     s = np.std(frames, axis=0, ddof=1)
     m = np.mean(frames, axis=0)
     return s / m
+
+
+# -- Analysis driver functions
+def compute_stats(frames, func=hurst, kw_func={}, n_jobs=1, raw=False,
+        verbose=0, subsmp=None):
+    """Analysis driver function.
+
+Inputs
+------
+frames: frames of flickering data.  Must be in 3D of (time, x, y)
+func: the function that computes the desired statistics
+kw_func: keyword arguments that will be passed to the func()
+subsmp: a 2D bitmap that specifies on which pixels the statistics
+    will be evaluated.
+n_jobs: the number of worker threads
+
+Returns
+-------
+M: the 2D matrix of the statstics across pixels (x, y)
+"""
+    if len(frames.shape) != 3:
+        raise ValueError('"frames" not in rank-3 array')
+
+    r, c = frames.shape[1:]
+    if subsmp is None:
+        subsmp = np.ones((r, c))
+    else:
+        assert subsmp.shape == (r, c)
+    subsmp = subsmp.astype('bool')
+
+    M = np.empty((r, c))
+    M[:, :] = np.nan
+
+    R = Parallel(n_jobs, verbose=verbose)(delayed(func)(frames[:, r_, c_],
+        **kw_func) for r_ in xrange(r) for c_ in xrange(c) if subsmp[r_, c_])
+    if raw:
+        return R
+
+    M[subsmp] = R
+    return M
+
+
+# -- Some protection against parallel running..
+if __name__ == '__main__':
+    pass   # do nothing
