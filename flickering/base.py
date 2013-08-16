@@ -190,6 +190,122 @@ def cv(frames):
     return s / m
 
 
+def sampen(y, M, r):
+    """Compute SampEn.
+
+Input
+-----
+y: input data
+M: max template length
+r: matching tolerance
+
+Output
+------
+e: sample entropy estimates for m = 0, 1, ..., M - 1
+A: number of matches for m = 1, ..., M
+B: number of matches for m = 0, ..., M - 1 excluding last point
+
+
+References
+----------
+http://www.physionet.org/physiotools/sampen/matlab/1.1-1/
+http://www.physionet.org/physiotools/mse/tutorial/tutorial.pdf
+http://ajpheart.physiology.org/content/278/6/H2039
+http://physionet.org/physiotools/mse/mse.c
+"""
+    # XXX: Since this is a dead copy of the matlab code in the reference
+    # the index starts from 1...
+    n = len(y)
+    lastrun = np.zeros(n + 1, 'int')
+    run = np.zeros(n + 1, 'int')
+    A = np.zeros(M + 1, 'int')
+    B = np.zeros(M + 1, 'int')
+    p = np.zeros(M + 1, 'int')
+    e = np.zeros(M + 1, 'int')
+
+    for i in xrange(1, n):
+        nj = n - i
+        y1 = y[i - 1]   # y is 0-based
+
+        for jj in xrange(1, nj + 1):
+            j = jj + i
+            if np.abs(y[j - 1] - y1) < r:  # y is 0-based
+                run[jj] = lastrun[jj] + 1
+                M1 = min(M, run[jj])
+                for m in xrange(1, M1 + 1):
+                    A[m] += 1
+                    if j < n:
+                        B[m] += 1
+            else:
+                run[jj] = 0
+
+        for j in xrange(1, nj + 1):
+            lastrun[j] = run[j]
+
+    N = n * (n - 1.) / 2.
+    A = A[1:]
+    B[0] = N
+    B = B[:M]
+    p = A.astype('float') / B
+    e = -np.log(p)
+
+    return e, A, B
+
+
+def sampen_scale2_py(y, r):
+    """Compute SampEn at m = 2 (Python version).
+
+Input
+-----
+y: input data
+r: matching tolerance
+
+References
+----------
+Wu et al., Entropy 2013, 15, 1069-1084
+"""
+    l = len(y)
+    Nn = 0
+    Nd = 0
+    for i in xrange(l - 2):
+        for j in xrange(i + 1, l - 2):
+            if np.abs(y[i] - y[j]) < r and np.abs(y[i + 1] - y[j + 1]) < r:
+                Nn += 1
+
+                if np.abs(y[i + 2] - y[j + 2]) < r:
+                    Nd += 1
+
+    return -np.log(float(Nd) / Nn)
+
+
+try:
+    # try to import fast C version
+    from . import ffast as ff
+    sampen_scale2 = ff.sampen_scale2_f64f64
+except:
+    sampen_scale2 = sampen_scale2_py
+
+
+def mse(signal, r=0.15, scales=None, scale_num=6, scale_min=1):
+    """Perform DFA analysis.
+
+Input
+-----
+signal: signal
+r: tolerance for template matching
+scales: a vector of scales
+
+Reference
+---------
+http://www.physionet.org/physiotools/mse/tutorial/tutorial.pdf
+"""
+    if len(signal.shape) != 1:
+        raise ValueError('"signal" must be 1D.')
+
+    if scales in None:
+        scales = range(scale_min, scale_min + scale_num)
+
+
 # -- Analysis driver functions
 def compute_stats(frames, func=hurst, kw_func={}, n_jobs=1, raw=False,
         verbose=0, subsmp=None):
