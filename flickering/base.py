@@ -17,6 +17,14 @@ def grouper(iterable, n, offset=0):
         yield iterable[ib: ie]
 
 
+def feat_normalize(V):
+    """Feature (pixel)-wise normalization"""
+    m = np.mean(V, axis=0)
+    s = np.std(V, axis=0, ddof=1)
+
+    return (V - m) / s
+
+
 # -- Data IO functions
 def load_once_csv(f, sep=','):
     """Load a single frame in a csv file."""
@@ -304,6 +312,9 @@ http://www.physionet.org/physiotools/mse/tutorial/tutorial.pdf
 
     if scales in None:
         scales = range(scale_min, scale_min + scale_num)
+
+    # XXX: NOT IMPEMENTED
+    raise NotImplementedError('Not implemented yet.')
 
 
 # -- Analysis driver functions
