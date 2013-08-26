@@ -19,7 +19,7 @@ def sampen_scale2_f64f64(np.ndarray[f64_t, ndim=1] y, float r):
             if abs(y[i] - y[j]) < r and abs(y[i + 1] - y[j + 1]) < r:
                 Nn += 1
 
-                if np.abs(y[i + 2] - y[j + 2]) < r:
+                if abs(y[i + 2] - y[j + 2]) < r:
                     Nd += 1
 
     return -np.log(float(Nd) / Nn)
