@@ -2,6 +2,7 @@
 import numpy as np
 import os
 import glob
+import Image
 from joblib import Parallel, delayed
 
 
@@ -25,6 +26,21 @@ def feat_normalize(V):
     return (V - m) / s
 
 
+def im2arr(im):
+    """PIL image to numpy array."""
+    shape = im.size
+    assert len(shape) == 2   # make sure it's 2D
+    size = shape[0] * shape[1]
+
+    I = np.array(im.getdata())
+    fac = I.size / size
+    
+    new_shape = (shape[1], shape[0])
+    if fac > 1:
+        new_shape += (-1,)
+    return I.reshape(new_shape)
+
+
 # -- Data IO functions
 def load_once_csv(f, sep=','):
     """Load a single frame in a csv file."""
@@ -40,33 +56,65 @@ def load_once_csv(f, sep=','):
     return M
 
 
-def load_data(path, dattype='csvdir', patt=None, kw_loader={}, flist=None):
+def load_once_PIL(im):
+    """Load a single frame with PIL."""
+    M = im2arr(im)
+    return M
+
+
+def load_data(path, dattype='auto', patt=None, kw_loader={}, flist=None):
     """Load flickering data (movie)."""
     # prep...
+    if dattype == 'auto':
+        if os.path.isdir(path):
+            afile = glob.glob(path + os.path.sep + '*.*')[-1]
+            suff = afile.split('.')[-1].lower()   # lowercase file extension
+            dattype = suff + 'dir'
+        else:
+            suff = path.split('.')[-1].lower()    # lowercase file extension
+            dattype = suff
+
     if dattype == 'csvdir':
         patt_ = '*.csv'
+        multifile = True
         backend = load_once_csv
+    elif dattype == 'tiff':
+        patt_ = ''
+        multifile = False
+        backend = load_once_PIL
     else:
         raise ValueError('Unrecognized "dattype"')
 
-    if patt is None:
-        patt = patt_
-
-    # get file lists and data
-    if flist is None:
-        flist = sorted(glob.glob(path + os.path.sep + patt))
-
-    if len(flist) == 0:
-        raise ValueError('No files to read')
-
+    # get the data..
     frames = []
-    for f in flist:
-        frame = backend(f)
-        frames.append(frame, **kw_loader)
+    if multifile:
+        patt = patt_ if patt is None else patt
+        if flist is None:
+            flist = sorted(glob.glob(path + os.path.sep + patt))
+        if len(flist) == 0:
+            raise ValueError('No files to read')
+
+        # actual loading
+        for f in flist:
+            frame = backend(f, **kw_loader)
+            frames.append(frame)
+
+    else:
+        # for now, this assumes multipage single file (e.g., tiff)
+        im = Image.open(path)
+        pg = 0
+        while True:
+            try:
+                frame = backend(im, **kw_loader)
+                frames.append(frame)
+                pg += 1
+                im.seek(pg)
+            except EOFError:
+                break
 
     # check if all frames have the same x y dimension...
     if all([e.shape == frames[0].shape for e in frames]):
-        frames = np.array(frames)
+        frames = np.asarray(frames)
     else:
         print 'Warning: some frame(s) have different dimensions'
 
