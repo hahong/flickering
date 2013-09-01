@@ -186,6 +186,7 @@ Options:
         verbose = int(opts['verbose'])
         print '* verbose =', verbose
 
+    print '* Processing', inp
     frames = base.load_data(inp)
     if featnorm:
         frames = base.feat_normalize(frames)
