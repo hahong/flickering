@@ -173,6 +173,7 @@ Options:
     n_jobs = 1
     verbose = 1
 
+    print '***', inp
     if 'full' in opts:
         full = True
         print '* full stats'
@@ -186,7 +187,6 @@ Options:
         verbose = int(opts['verbose'])
         print '* verbose =', verbose
 
-    print '* Processing', inp
     frames = base.load_data(inp)
     if featnorm:
         frames = base.feat_normalize(frames)
