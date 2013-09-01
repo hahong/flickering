@@ -239,10 +239,22 @@ http://en.wikipedia.org/wiki/Detrended_fluctuation_analysis
     return alpha, ns, Fns
 
 
+def smean(frames):
+    """Get sample mean."""
+    m = np.mean(frames, axis=0)
+    return m
+
+
+def sstd(frames):
+    """Get sample stddv."""
+    s = np.std(frames, axis=0, ddof=1)
+    return s 
+
+
 def cv(frames):
     """Get coefficient of vaiation."""
-    s = np.std(frames, axis=0, ddof=1)
-    m = np.mean(frames, axis=0)
+    s = sstd(frames)
+    m = smean(frames)
     return s / m
 
 
@@ -389,8 +401,32 @@ http://www.physionet.org/physiotools/mse/tutorial/tutorial.pdf
     return es
 
 
+def fft_slope(signal, sfreq=33, full=False):
+    """Run FFT analysis and compute the slope between log(amplitude) and log(frequency)
+
+Input
+-----
+signal: signal
+sfreq: sampling frequency in Hz
+full: if True, return the raw FFT data as well.
+"""
+    assert signal.ndim == 1
+    #sp = np.fft.fft(signal)
+    sp = np.fft.rfft(signal)
+    freq = np.fft.fftfreq(signal.shape[-1], d=1. / sfreq)
+
+    si = np.nonzero(freq > 0)[0]
+    xlog = np.log(freq[si])
+    ylog = np.log(np.abs(sp[si]))
+    p = np.polyfit(xlog, ylog, 1)
+    
+    if full:
+        return p, sp, freq
+    return p[0]
+
+
 # -- Analysis driver functions
-def compute_stats(frames, func=hurst, kw_func={}, n_jobs=1, raw=False,
+def compute_stats(frames, func, kw_func={}, n_jobs=1, raw=False,
         verbose=0, subsmp=None):
     """Analysis driver function.
 
@@ -407,8 +443,8 @@ Returns
 -------
 M: the 2D matrix of the statstics across pixels (x, y)
 """
-    if len(frames.shape) != 3:
-        raise ValueError('"frames" not in rank-3 array')
+    if frames.ndim != 3:
+        raise ValueError('"frames" is not a rank-3 array')
 
     r, c = frames.shape[1:]
     if subsmp is None:
