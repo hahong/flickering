@@ -3,6 +3,7 @@ from . import base
 from scipy import io
 import numpy as np
 import cPickle as pk
+import os
 
 
 # -- valid list of statistics
@@ -107,6 +108,96 @@ def run_analysis(frames, cfgs, outprefix, n_jobs=1, verbose=0, savmulti=True):
             res.update(res_raw)
             write_res_multiple(outprefix + '.all', res, npz=False,
                     mat=False, pkl=True)
+
+
+# -- CLI functions
+def parse_opts(opts0):
+    """Parse the options in the command line.  This somewhat
+    archaic function mainly exists for backward-compatability."""
+    opts = {}
+    # parse the stuff in "opts"
+    for opt in opts0:
+        parsed = opt.split('=')
+        key = parsed[0].strip()
+        if len(parsed) > 1:
+            # OLD: cmd = parsed[1].strip()
+            cmd = '='.join(parsed[1:]).strip()
+        else:
+            cmd = ''
+        opts[key] = cmd
+
+    return opts
+
+
+def parse_opts2(tokens, optpx='--', argparam=False):
+    """A newer option parser."""
+    opts0 = []
+    args = []
+    n = len(optpx)
+
+    for token in tokens:
+        if token.startswith(optpx):
+            opts0.append(token[n:])
+        else:
+            if argparam:
+                token = token.split('=')
+            args.append(token)
+
+    opts = parse_opts(opts0)
+
+    return args, opts
+
+
+def cli_flickering_analysis(full_argv):
+    """Command line interface"""
+    args, opts = parse_opts2(full_argv[1:])
+
+    if len(args) != 2:
+        usage = """Usage:
+$EXEC [options] <input path> <output path prefix>
+
+Options:
+--full         Compute full statistics including DFA, MSE, and FFT.
+--n_jobs=#     Set the number of worker threads (default=1).
+--verbose=#    Set the verbosity (default=1).
+--featnorm     Do feature normalization first.
+"""
+        usage = usage.replace('$EXEC', os.path.basename(full_argv[0]))
+        print usage
+        return 1
+
+    # -- do work
+    inp, outp = args
+    full = False
+    featnorm = False
+    n_jobs = 1
+    verbose = 1
+
+    if 'full' in opts:
+        full = True
+        print '* full stats'
+    if 'featnorm' in opts:
+        featnorm = True
+        print '* feature normalization'
+    if 'n_jobs' in opts:
+        n_jobs = int(opts['n_jobs'])
+        print '* n_jobs =', n_jobs
+    if 'verbose' in opts:
+        verbose = int(opts['verbose'])
+        print '* verbose =', verbose
+
+    frames = base.load_data(inp)
+    if featnorm:
+        frames = base.feat_normalize(frames)
+    print '* data shape =', frames.shape
+
+    if full:
+        cfgs = ANALYSIS_CFGS_TEMPLATE_FULL
+    else:
+        cfgs = ANALYSIS_CFGS_TEMPLATE_FAST
+
+    run_analysis(frames, cfgs, outp, verbose=verbose, n_jobs=n_jobs)
+    return 0
 
 
 # -- Some protection against parallel running..
