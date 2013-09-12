@@ -67,7 +67,7 @@ def load_data(path, dattype='auto', patt=None, kw_loader={}, flist=None):
     # prep...
     if dattype == 'auto':
         if os.path.isdir(path):
-            afile = glob.glob(path + os.path.sep + '*.*')[-1]
+            afile = glob.glob(path + os.path.sep + '*.*')[0]
             suff = afile.split('.')[-1].lower()   # lowercase file extension
             dattype = suff + 'dir'
         else:
@@ -83,7 +83,7 @@ def load_data(path, dattype='auto', patt=None, kw_loader={}, flist=None):
         multifile = False
         backend = load_once_PIL
     else:
-        raise ValueError('Unrecognized "dattype"')
+        raise ValueError('Unrecognized "dattype": %s' % dattype)
 
     # get the data..
     frames = []
