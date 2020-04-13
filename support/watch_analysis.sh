@@ -11,6 +11,22 @@ outdir="$srcdir/output"        # output dir
 donedir="$srcdir/done"         # output dir
 faildir="$srcdir/failed"       # output dir
 
+function get_one_target {
+	declare -a files
+	if ls "$srcdir"/*.csv &> /dev/null; then
+		files+=("$srcdir"/*.csv)
+	fi
+	if ls "$srcdir"/*.tiff &> /dev/null; then
+		files+=("$srcdir"/*.tiff)
+	fi
+
+	if [ "${#files[@]}" == 0 ]; then
+		echo .none
+	else
+		echo "${files[0]}"
+	fi
+}
+
 while true
 do
 	sleep 1
@@ -22,7 +38,7 @@ do
 	chmod 777 "$srcdir" "$outdir" "$donedir" "$faildir"
 
 	# -- check if there's any target file
-	if ! ls "$srcdir"/*.tiff &> /dev/null; then
+	if [ ! -e "`get_one_target`" ]; then
 		# no target file not exists
 		continue
 	fi
@@ -47,27 +63,33 @@ do
 	done
 	
 	# -- check one more time if there's any target file
-	if ! ls "$srcdir"/*.tiff &> /dev/null; then
+	if [ ! -e "`get_one_target`" ]; then
 		# no target file not exists
 		continue
 	fi
 
 	# -- begin analysis
 	#DBG echo 'do the analysis'
-	files=("$srcdir"/*.tiff)
-	fno="${files[0]}"
+	fno=`get_one_target`
 	fnb="`basename "$fno"`"
 	fnb0="`basename "$fno" .tiff`"
+	fnb0="`basename "$fnb0" .csv`"
 	fnlog="${fnb0}.log"
 
 	mv "$fno" $wrkdir
-	echo '** Processing:' $fnb
+	echo -e '\e[42m\e[30mProcessing:\e[49m\e[39m' $fnb
 	touch "$srcdir/00_WORKING"
 	if fa.py $2 $3 $4 $5 $6 $7 $8 $9 "$wrkdir/$fnb" "$outdir/$fnb0" &> "$outdir/$fnlog"; then
 		# success
 		mv "$wrkdir/$fnb" "$donedir"
+	        echo -e '\e[42m\e[30mFinished:\e[49m\e[39m' $fnb
 	else
 		mv "$wrkdir/$fnb" "$faildir"
+	        echo -e '\e[43m\e[30mFailed:\e[49m\e[39m' $fnb
 	fi
 	rm -f "$srcdir/00_WORKING"
+
+	if [ -e "$srcdir/00_HALT" ]; then
+		break
+	fi
 done

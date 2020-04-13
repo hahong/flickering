@@ -1,8 +1,9 @@
 """Base functions for flickering analysis"""
 import numpy as np
+import io
 import os
 import glob
-import Image
+from PIL import Image
 from joblib import Parallel, delayed
 
 
@@ -34,7 +35,7 @@ def im2arr(im):
 
     I = np.array(im.getdata())
     fac = I.size / size
-    
+
     new_shape = (shape[1], shape[0])
     if fac > 1:
         new_shape += (-1,)
@@ -44,14 +45,16 @@ def im2arr(im):
 # -- Data IO functions
 def load_once_csv(f, sep=','):
     """Load a single frame in a csv file."""
-    lines = [e.strip().split(sep) for e in open(f).readlines()]
+    lines = [e.strip().split(sep) for e in
+             io.open(f, mode='r', encoding='ascii',
+                     errors='ignore').readlines()]
     M = []
     for line in lines:
         # ignore the line if an empty entry exists
         if '' in line:
             continue
         # otherwise process the line
-        M.append([float(e) for e in line])
+        M.append([float(e.strip()) for e in line])
     M = np.array(M)
     return M
 
@@ -78,6 +81,10 @@ def load_data(path, dattype='auto', patt=None, kw_loader={}, flist=None):
         patt_ = '*.csv'
         multifile = True
         backend = load_once_csv
+    elif dattype == 'csv':
+        patt_ = ''
+        multifile = False
+        backend = load_once_csv
     elif dattype == 'tiff':
         patt_ = ''
         multifile = False
@@ -100,17 +107,21 @@ def load_data(path, dattype='auto', patt=None, kw_loader={}, flist=None):
             frames.append(frame)
 
     else:
-        # for now, this assumes multipage single file (e.g., tiff)
-        im = Image.open(path)
-        pg = 0
-        while True:
-            try:
-                frame = backend(im, **kw_loader)
-                frames.append(frame)
-                pg += 1
-                im.seek(pg)
-            except EOFError:
-                break
+        if dattype == 'tiff':
+            im = Image.open(path)
+            pg = 0
+            while True:
+                try:
+                    frame = backend(im, **kw_loader)
+                    frames.append(frame)
+                    pg += 1
+                    im.seek(pg)
+                except EOFError:
+                    break
+        elif dattype == 'csv':
+            # 1D analysis: assumes data in (kind, time)
+            frame = backend(path, **kw_loader)
+            frames = frame.T[:, :, np.newaxis]
 
     # check if all frames have the same x y dimension...
     if all([e.shape == frames[0].shape for e in frames]):
@@ -144,6 +155,7 @@ http://en.wikipedia.org/wiki/Hurst_exponent
         ns = np.logspace(np.log10(n_begin), np.log10(len(signal)), num=n_num)
     elif ns == 'full':
         ns = np.arange(2, len(signal) + 1)
+    ns = np.round(ns).astype('int')
 
     # mean
     # incorrect: m = np.mean(signal)
@@ -248,7 +260,7 @@ def smean(frames):
 def sstd(frames):
     """Get sample stddv."""
     s = np.std(frames, axis=0, ddof=1)
-    return s 
+    return s
 
 
 def cv(frames):
@@ -419,7 +431,7 @@ full: if True, return the raw FFT data as well.
     xlog = np.log(freq[si])
     ylog = np.log(np.abs(sp[si]))
     p = np.polyfit(xlog, ylog, 1)
-    
+
     if full:
         return p, sp, freq
     return p[0]

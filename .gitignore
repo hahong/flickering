@@ -4,3 +4,7 @@
 *.DS_Store
 .*swp
 papers/*/output
+flickering/ffast.so
+src/build/
+src/ffast.c
+src/ffast.so
