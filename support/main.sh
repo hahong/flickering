@@ -51,7 +51,7 @@ watch_analysis.sh $projroot/Full/ --n_jobs=-1 --verbose=1 --full &
 while true
 do
 	echo -e '\e[42m\e[30mInfo:\e[49m\e[39m Press Ctrl+C to completely halt the service.'
-	sleep 1800
+	sleep 14400
 done
 wait
 poweroff
